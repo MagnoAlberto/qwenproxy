@@ -18,12 +18,12 @@ import type { FunctionToolDefinition } from '../tools/types.ts';
 import { robustParseJSON } from '../utils/json.ts';
 import { StreamingToolParser } from '../tools/parser.ts';
 
-interface DeltaResult {
+export interface DeltaResult {
   delta: string;
   matchedContent: string;
 }
 
-function getIncrementalDelta(oldStr: string, newStr: string): DeltaResult {
+export function getIncrementalDelta(oldStr: string, newStr: string): DeltaResult {
   if (!oldStr) {
     return { delta: newStr, matchedContent: newStr };
   }
@@ -47,30 +47,9 @@ function getIncrementalDelta(oldStr: string, newStr: string): DeltaResult {
     };
   }
 
-  // Fallback: If oldStr is found anywhere in newStr, return the suffix after it
-  const idx = newStr.indexOf(oldStr);
-  if (idx !== -1) {
-    return {
-      delta: newStr.substring(idx + oldStr.length),
-      matchedContent: newStr
-    };
-  }
-
-  // Sliding overlap search: find the longest suffix of oldStr that exists in newStr
-  const suffixMinLength = Math.min(oldStr.length, 4);
-  const suffixMaxSearch = Math.min(oldStr.length, 30);
-  for (let i = suffixMaxSearch; i >= suffixMinLength; i--) {
-    const suffix = oldStr.slice(-i);
-    const lastIdx = newStr.lastIndexOf(suffix);
-    if (lastIdx !== -1) {
-      return {
-        delta: newStr.substring(lastIdx + suffix.length),
-        matchedContent: newStr
-      };
-    }
-  }
-
-  // Otherwise, it is strictly incremental (or pure delta):
+  // If the prefix check fails, we treat it as strictly incremental (or pure delta).
+  // We avoid fallback search/sliding overlap checks which cause disastrous false-positive
+  // corruptions on incremental streams with repetitive code/words (like "import {", "const", etc.).
   return {
     delta: newStr,
     matchedContent: oldStr + newStr
